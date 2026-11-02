@@ -13,6 +13,8 @@
  * - any other message (subagent results, jobs, schedules, command
  *   expansions without a principal) keeps the previous caller.
  *
+ * A step that admits prompts of more than one OpenViking user at once leaves
+ * its turn with no caller (each prompt is still captured as its own caller).
  * A subagent Session acts for its root Session's current caller. The caller
  * maps to an OpenViking user through the `identities` templates; a principal
  * kind without a template, or a template whose result is not a valid
@@ -124,6 +126,23 @@ export class CallerTracker {
   }
 
   /**
+   * A step admitted a batch of messages. Its turn acts for their common
+   * caller; prompts of more than one OpenViking user (or of a caller with no
+   * identity next to one with an identity) leave the turn with no identity,
+   * so nothing of one user is recalled for, or captured as, another.
+   * @param session - the stepping Session.
+   * @param sources - the admitted messages' sources, in order.
+   */
+  onAdmitted(session: Session, sources: readonly MessageSource[]): void {
+    this.observe(session)
+    const { unattributedPrompts } = this.config()
+    const named = sources.map(source => claimedCallerOf(source, unattributedPrompts)).filter(caller => caller.kind === 'set')
+    if (named.length === 0) return
+    const keys = new Set(named.map(caller => caller.principal === undefined ? undefined : ovUserOf(caller.principal, this.config())))
+    this.callers.set(session.id, keys.size === 1 ? named.at(-1)!.principal : undefined)
+  }
+
+  /**
    * Who the Session's current turn acts for.
    * @param session - the Session, or a subagent of a Session this tracker saw.
    * @returns the OpenViking identity, or undefined when there is none.
@@ -131,7 +150,25 @@ export class CallerTracker {
   identityOf(session: Session): TurnIdentity | undefined {
     this.observe(session)
     const root = this.rootOf(session.id)
-    const principal = this.callers.get(root)
+    return this.identityFor(this.callers.get(root), root)
+  }
+
+  /**
+   * Who one logged message speaks for: a prompt names its own caller,
+   * whatever batch it was admitted in; any other message speaks for the
+   * Session's current turn.
+   * @param session - the Session that logged it.
+   * @param source - the message source.
+   * @returns the OpenViking identity, or undefined when there is none.
+   */
+  identityOfSource(session: Session, source: MessageSource): TurnIdentity | undefined {
+    const caller = claimedCallerOf(source, this.config().unattributedPrompts)
+    if (caller.kind === 'keep') return this.identityOf(session)
+    this.observe(session)
+    return this.identityFor(caller.principal, this.rootOf(session.id))
+  }
+
+  private identityFor(principal: Principal | undefined, root: string): TurnIdentity | undefined {
     if (principal === undefined) return undefined
     const config = this.config()
     const user = ovUserOf(principal, config)

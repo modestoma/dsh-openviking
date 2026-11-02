@@ -122,7 +122,7 @@ export function deletableUri(identity: TurnIdentity, uri: string): string {
  * A file name for a new note.
  * @param title - the model's title, or undefined.
  * @param now - the current time.
- * @returns `<timestamp>-<slug>.md` with only safe characters.
+ * @returns `<timestamp>[-<slug>]-<random>.md` with only safe characters, unique per call.
  */
 export function noteFileName(title: string | undefined, now: Date): string {
   const stamp = now.toISOString().replace(/[-:]/gu, '').replace(/\.\d{3}Z$/u, 'Z')
@@ -132,8 +132,9 @@ export function noteFileName(title: string | undefined, now: Date): string {
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/gu, '')
     .slice(0, 48)
-  const safe = /^[A-Za-z0-9-]+$/u.test(slug) && slug !== '' ? slug : randomUUID().slice(0, 8)
-  return `${stamp}-${safe}.md`
+  // Always suffixed: two notes with one title in one second must not overwrite each other.
+  const unique = randomUUID().slice(0, 8)
+  return /^[A-Za-z0-9-]+$/u.test(slug) ? `${stamp}-${slug}-${unique}.md` : `${stamp}-${unique}.md`
 }
 
 interface Spec<S extends z.ZodType, V> {

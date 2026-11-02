@@ -4,7 +4,9 @@
  *
  * - One OpenViking session per (DSH root Session, OpenViking user, peer):
  *   in a Session several users take turns in, each user's turns land in that
- *   user's own session, never in another user's.
+ *   user's own session, never in another user's. A prompt is captured as the
+ *   caller its own source names; an assistant reply as the turn's caller, so
+ *   a turn admitting prompts of several users captures no reply.
  * - Captured: `user` prompts, and assistant replies when `capture.assistant`
  *   is on. Never captured: tool results, context injected by plugins
  *   (including this plugin's recall), and interrupted replies. A call to a
@@ -13,7 +15,8 @@
  *   whole chain until the root Session's turn ends, because they may quote
  *   the denied tool's result.
  * - A session is committed once `capture.commitAfterChars` characters were
- *   captured since its last commit, when DSH starts compacting the Session,
+ *   captured since its last commit, when DSH starts compacting its root
+ *   Session (every user's session of that root),
  *   and (best effort) when the plugin stops.
  * - Writes run one at a time in arrival order. A retryable failure keeps the
  *   write, with the identity it was made for, in a bounded in-memory queue
@@ -30,7 +33,7 @@ import { OpenVikingError } from './client.ts'
 import type { OpenVikingClient, OvIdentity } from './client.ts'
 import type { PluginConfig } from './config.ts'
 import type { Session, SessionEvent } from './host.ts'
-import type { CallerTracker } from './identity.ts'
+import type { CallerTracker, TurnIdentity } from './identity.ts'
 
 /** One write to an OpenViking session. */
 type Write =
@@ -40,6 +43,8 @@ type Write =
 /** One OpenViking session this process writes to. */
 interface OvSession {
   readonly key: string
+  /** The DSH root Session id. */
+  readonly root: string
   readonly identity: OvIdentity
   readonly sessionId: string
   ensured: boolean
@@ -147,18 +152,18 @@ export class CaptureQueue {
     if (session.header.parentSession !== undefined && !config.subagents) return
     switch (event.type) {
       case 'compaction/start':
-        this.commitFor(session, root)
+        this.commitFor(root)
         return
       case 'user/message': {
         const message = (event as Extract<SessionEvent, { type: 'user/message' }>).data
         if (message.source.kind !== 'user') return
-        this.capture(session, root, 'user', textOf(message.content))
+        this.capture(root, 'user', textOf(message.content), this.deps.callers.identityOfSource(session, message.source))
         return
       }
       case 'assistant/message': {
         const data = (event as Extract<SessionEvent, { type: 'assistant/message' }>).data
         if (!config.capture.assistant || data.interrupted === true || this.tainted.has(root)) return
-        this.capture(session, root, 'assistant', textOf(data.message.content))
+        this.capture(root, 'assistant', textOf(data.message.content), this.deps.callers.identityOf(session))
         return
       }
       default:
@@ -177,29 +182,28 @@ export class CaptureQueue {
     return this.pending.length
   }
 
-  private capture(session: Session, root: string, role: 'user' | 'assistant', text: string): void {
+  private capture(root: string, role: 'user' | 'assistant', text: string, identity: TurnIdentity | undefined): void {
     const trimmed = text.trim()
-    if (trimmed === '') return
-    const target = this.sessionFor(session, root)
-    if (target === undefined) return
+    if (trimmed === '' || identity === undefined) return
+    const target = this.sessionFor(root, identity)
     const { maxMessageChars } = this.deps.config().capture
     const content = trimmed.length > maxMessageChars ? `${trimmed.slice(0, maxMessageChars)}…` : trimmed
     this.enqueue(target, { kind: 'message', role, content, createdAt: new Date().toISOString() })
   }
 
-  private commitFor(session: Session, root: string): void {
-    const target = this.sessionFor(session, root)
-    if (target !== undefined) this.enqueue(target, { kind: 'commit' })
+  /** Commit every OpenViking session of this root Session. */
+  private commitFor(root: string): void {
+    for (const target of this.sessions.values()) {
+      if (target.root === root) this.enqueue(target, { kind: 'commit' })
+    }
   }
 
-  private sessionFor(session: Session, root: string): OvSession | undefined {
-    const identity = this.deps.callers.identityOf(session)
-    if (identity === undefined) return undefined
+  private sessionFor(root: string, identity: TurnIdentity): OvSession {
     const plain: OvIdentity = { user: identity.user, ...identity.peer === undefined ? {} : { peer: identity.peer } }
     const key = `${root}\u0000${plain.user}\u0000${plain.peer ?? ''}`
     let target = this.sessions.get(key)
     if (target === undefined) {
-      target = { key, identity: plain, sessionId: ovSessionIdOf(root, plain), ensured: false, charsSinceCommit: 0, latched: false }
+      target = { key, root, identity: plain, sessionId: ovSessionIdOf(root, plain), ensured: false, charsSinceCommit: 0, latched: false }
       this.sessions.set(key, target)
     }
     return target

@@ -88,6 +88,15 @@ describe('plugin', () => {
     expect(server.requests).toEqual([])
   })
 
+  it('skips recall for a step admitting prompts of several users', async () => {
+    const server = fakeServer(recallHit)
+    const host = fakeContext()
+    apply(host.ctx, { endpoint: 'http://ov.test' }, { fetch: server.fetch })
+    const step = { kind: 'enter' as const, messages: [message('alpha long prompt', feishu('ou_a')), message('beta long prompt', feishu('ou_b'))] }
+    expect(await host.preStep(session('s1'), step)).toBe(step)
+    expect(server.requests).toEqual([])
+  })
+
   it('captures Session events and commits on dispose', async () => {
     const server = fakeServer()
     const host = fakeContext()

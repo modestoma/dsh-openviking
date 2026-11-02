@@ -29,7 +29,7 @@ DSH 在每条用户消息的来源里记录调用者：Host 所有者从浏览�
 | `user` 消息，两者都没有（终端、SDK，或不记录调用者的接入方） | 按 `unattributedPrompts`：`skip` 没有身份，`owner` 视为所有者 |
 | 其他消息（子代理结果、后台任务、定时任务） | 沿用上一轮的调用者 |
 
-调用者通过 `identities` 模板映射成 OpenViking 用户，例如 `feishu-user: 'feishu-{userId}'` 把 `{ kind: 'feishu-user', userId: 'ou_x' }` 映射成 `feishu-ou_x`。没有模板的 kind、缺字段或结果含非法字符时，这一轮没有身份：不召回、不捕获、不提供记忆工具（失败即关闭）。子代理会话使用根会话当前的调用者。
+调用者通过 `identities` 模板映射成 OpenViking 用户，例如 `feishu-user: 'feishu-{userId}'` 把 `{ kind: 'feishu-user', userId: 'ou_x' }` 映射成 `feishu-ou_x`。没有模板的 kind、缺字段或结果含非法字符时，这一轮没有身份：不召回、不捕获、不提供记忆工具（失败即关闭）。一步里同时接纳了多个 OpenViking 用户的消息时（例如群聊共享会话里两个人的消息合并进同一步），这一轮没有身份：不召回、不捕获助手回复、不提供工具，但每条用户消息仍按它自己的调用者捕获。子代理会话使用根会话当前的调用者。
 
 希望自己在 Web 和其他接入方用同一份记忆时，把 `identities.owner` 设成与另一个接入方相同的用户名，例如 `owner: 'feishu-ou_你的user_id'`。
 
@@ -48,7 +48,7 @@ DSH 在每条用户消息的来源里记录调用者：Host 所有者从浏览�
 | `memory_search` | 语义检索 | 非共享读者只检索自己的空间 |
 | `memory_read` | 读取全文 | 非共享读者只能读 `viking://user/<自己>/` |
 | `memory_list` | 列目录，默认自己的记忆目录 | 同上 |
-| `memory_remember` | 新建一条记忆 | 只写 `viking://user/<自己>/memories/notes/` |
+| `memory_remember` | 新建一条记忆（文件名带随机后缀，不会覆盖已有记忆） | 只写 `viking://user/<自己>/memories/notes/` |
 | `memory_forget` | 删除一个记忆文件 | 只删 `viking://user/<自己>/memories/` 下的文件 |
 
 URI 含 `.`、`..`、百分号转义或反斜杠时直接拒绝。工具只在这一轮有身份时提供。

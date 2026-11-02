@@ -62,6 +62,29 @@ describe('CaptureQueue', () => {
     expect(created).toEqual(['dsh-s1-feishu-ou_a', 'dsh-s1-feishu-ou_b'])
   })
 
+  it('captures each prompt of a mixed batch as its own caller and no reply of that turn', async () => {
+    const { server, callers, queue } = setup()
+    const root = session('s1')
+    callers.onClaimed(root, feishu('ou_a'))
+    callers.onClaimed(root, feishu('ou_b'))
+    callers.onAdmitted(root, [feishu('ou_a'), feishu('ou_b')])
+    expect(callers.identityOf(root)).toBeUndefined()
+    queue.onEvent(root, userEvent('alpha asks', feishu('ou_a')))
+    queue.onEvent(root, userEvent('beta asks', feishu('ou_b')))
+    queue.onEvent(root, assistantEvent('reply to both'))
+    await queue.idle()
+    expect(messagesOf(server.requests)).toEqual([
+      { session: 'dsh-s1-feishu-ou_a', user: 'feishu-ou_a', role: 'user', content: 'alpha asks' },
+      { session: 'dsh-s1-feishu-ou_b', user: 'feishu-ou_b', role: 'user', content: 'beta asks' },
+    ])
+    callers.onAdmitted(root, [feishu('ou_a'), { kind: 'job' }, feishu('ou_a')])
+    expect(callers.identityOf(root)?.user).toBe('feishu-ou_a')
+    callers.onAdmitted(root, [{ kind: 'job' }])
+    expect(callers.identityOf(root)?.user).toBe('feishu-ou_a')
+    callers.onAdmitted(root, [ownerSource, { kind: 'user' }])
+    expect(callers.identityOf(root)).toBeUndefined()
+  })
+
   it('captures nothing without an identity and skips injected context and interrupted replies', async () => {
     const { server, callers, queue } = setup()
     const root = session('s1')

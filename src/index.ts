@@ -89,7 +89,7 @@ export function apply(ctx: HostContext, config?: unknown, options: OpenVikingPlu
     const decision = await next()
     if (decision.kind !== 'enter') return decision
     const { session } = payload.agent
-    for (const message of decision.messages) callers.onClaimed(session, message.source)
+    callers.onAdmitted(session, decision.messages.map(message => message.source))
     if (session.header.parentSession !== undefined && !resolved.subagents) return decision
     const identity = callers.identityOf(session)
     if (identity === undefined) return decision

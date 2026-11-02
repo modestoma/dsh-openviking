@@ -45,7 +45,8 @@ describe('URI checks', () => {
 
   it('builds safe note file names', () => {
     const now = new Date('2026-11-02T08:09:10.123Z')
-    expect(noteFileName('Tea  Preference!', now)).toBe('20261102T080910Z-tea-preference.md')
+    expect(noteFileName('Tea  Preference!', now)).toMatch(/^20261102T080910Z-tea-preference-[0-9a-f]{8}\.md$/u)
+    expect(noteFileName('Tea', now)).not.toBe(noteFileName('Tea', now))
     expect(noteFileName('喝茶偏好', now)).toMatch(/^20261102T080910Z-[0-9a-f]{8}\.md$/u)
     expect(noteFileName(undefined, now)).toMatch(/^20261102T080910Z-[0-9a-f]{8}\.md$/u)
   })
@@ -105,10 +106,11 @@ describe('memory tools', () => {
   it('remember into the caller own notes and forget only own memories', async () => {
     const { run, callers, root, server } = setup()
     callers.onClaimed(root, ownerSource)
-    expect(await run('memory_remember', { content: 'prefers green tea', title: 'Tea' })).toEqual({ uri: 'viking://user/owner/memories/notes/20261102T080910Z-tea.md' })
-    expect(server.requests[0]).toMatchObject({ path: '/api/v1/content/write', body: { uri: 'viking://user/owner/memories/notes/20261102T080910Z-tea.md', content: '# Tea\n\nprefers green tea\n' } })
-    expect(await run('memory_forget', { uri: 'viking://user/owner/memories/notes/20261102T080910Z-tea.md' })).toEqual({ uri: 'viking://user/owner/memories/notes/20261102T080910Z-tea.md', deleted: true })
-    expect(server.requests[1]).toMatchObject({ method: 'DELETE', path: '/api/v1/fs', query: { uri: 'viking://user/owner/memories/notes/20261102T080910Z-tea.md', recursive: 'false' } })
+    const { uri } = await run('memory_remember', { content: 'prefers green tea', title: 'Tea' }) as { uri: string }
+    expect(uri).toMatch(/^viking:\/\/user\/owner\/memories\/notes\/20261102T080910Z-tea-[0-9a-f]{8}\.md$/u)
+    expect(server.requests[0]).toMatchObject({ path: '/api/v1/content/write', body: { uri, content: '# Tea\n\nprefers green tea\n' } })
+    expect(await run('memory_forget', { uri })).toEqual({ uri, deleted: true })
+    expect(server.requests[1]).toMatchObject({ method: 'DELETE', path: '/api/v1/fs', query: { uri, recursive: 'false' } })
     await expect(run('memory_forget', { uri: 'viking://resources/kb.md' })).rejects.toThrow('[forbidden]')
   })
 
