@@ -8,8 +8,10 @@
  * - Captured: `user` prompts, and assistant replies when `capture.assistant`
  *   is on. Never captured: tool results, context injected by plugins
  *   (including this plugin's recall), and interrupted replies. A call to a
- *   `capture.toolDeny` tool stops capturing assistant replies until the turn
- *   ends, because they may quote the denied tool's result.
+ *   `capture.toolDeny` tool in a root Session or any of its subagents (watched
+ *   even when `subagents` is off) stops capturing assistant replies of the
+ *   whole chain until the root Session's turn ends, because they may quote
+ *   the denied tool's result.
  * - A session is committed once `capture.commitAfterChars` characters were
  *   captured since its last commit, when DSH starts compacting the Session,
  *   and (best effort) when the plugin stops.
@@ -17,7 +19,8 @@
  *   write, with the identity it was made for, in a bounded in-memory queue
  *   (`capture.pendingMax`, oldest dropped first) retried every minute and
  *   before later writes of the same session; later writes of that session
- *   queue behind it so order is kept. The queue does not survive a restart.
+ *   queue behind it so order is kept. A commit that fails after its append
+ *   succeeded keeps only the commit. The queue does not survive a restart.
  *
  * @module dsh-openviking/capture
  */
@@ -125,8 +128,9 @@ export class CaptureQueue {
   onEvent(session: Session, event: SessionEvent): void {
     const config = this.deps.config()
     if (!config.capture.enabled) return
-    if (session.header.parentSession !== undefined && !config.subagents) return
+    this.deps.callers.observe(session)
     const root = this.deps.callers.rootOf(session.id)
+    // Taint follows every Session of the chain: a subagent's denied tool result reaches the root through its report.
     switch (event.type) {
       case 'tool/call': {
         const { name } = (event as Extract<SessionEvent, { type: 'tool/call' }>).data
@@ -134,8 +138,14 @@ export class CaptureQueue {
         return
       }
       case 'turn/end':
-        this.tainted.delete(root)
+        // Only the root's own turn end lifts the taint; a subagent finishing does not end the root turn.
+        if (session.id === root) this.tainted.delete(root)
         return
+      default:
+        break
+    }
+    if (session.header.parentSession !== undefined && !config.subagents) return
+    switch (event.type) {
       case 'compaction/start':
         this.commitFor(session, root)
         return
@@ -242,9 +252,20 @@ export class CaptureQueue {
     }
     await this.deps.client.addMessage(session.identity, session.sessionId, write)
     session.charsSinceCommit += write.content.length
-    if (session.charsSinceCommit >= this.deps.config().capture.commitAfterChars) {
+    if (session.charsSinceCommit >= this.deps.config().capture.commitAfterChars) await this.commitAfterAppend(session)
+  }
+
+  /** Commit after a successful append; a failure keeps only the commit for retry, never the appended message. */
+  private async commitAfterAppend(session: OvSession): Promise<void> {
+    try {
       await this.deps.client.commit(session.identity, session.sessionId)
       session.charsSinceCommit = 0
+    } catch (error) {
+      if (error instanceof OpenVikingError && error.retryable) {
+        this.keep(session, { kind: 'commit' })
+        return
+      }
+      this.deps.warn('dsh-openviking: commit for %s failed: %s', session.identity.user, error instanceof Error ? error.message : String(error))
     }
   }
 

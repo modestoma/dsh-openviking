@@ -118,7 +118,7 @@ export class CallerTracker {
    * @param source - the claimed message's source.
    */
   onClaimed(session: Session, source: MessageSource): void {
-    this.remember(session)
+    this.observe(session)
     const caller = claimedCallerOf(source, this.config().unattributedPrompts)
     if (caller.kind === 'set') this.callers.set(session.id, caller.principal)
   }
@@ -129,7 +129,7 @@ export class CallerTracker {
    * @returns the OpenViking identity, or undefined when there is none.
    */
   identityOf(session: Session): TurnIdentity | undefined {
-    this.remember(session)
+    this.observe(session)
     const root = this.rootOf(session.id)
     const principal = this.callers.get(root)
     if (principal === undefined) return undefined
@@ -168,7 +168,11 @@ export class CallerTracker {
     this.headers.clear()
   }
 
-  private remember(session: Session): void {
+  /**
+   * Remember a Session's header, so its subagents resolve to their root.
+   * @param session - any Session.
+   */
+  observe(session: Session): void {
     if (!this.headers.has(session.id)) this.headers.set(session.id, session.header)
   }
 }

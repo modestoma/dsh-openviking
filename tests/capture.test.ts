@@ -93,6 +93,39 @@ describe('CaptureQueue', () => {
     expect(messagesOf(server.requests).map(entry => entry.content)).toEqual(['read the wiki', 'allowed tool reply', 'next question', 'fresh reply'])
   })
 
+  it('keeps the root taint until the root turn ends, whatever its subagents do', async () => {
+    for (const subagents of [false, true]) {
+      const { server, callers, queue } = setup({ subagents, capture: { toolDeny: ['kb_*'] } })
+      const root = session('s1')
+      const child = session('c1', { parentSession: 's1' })
+      callers.onClaimed(root, ownerSource)
+      queue.onEvent(root, userEvent('ask'))
+      queue.onEvent(child, { type: 'tool/call', data: { turn: 1, callId: 'k', name: 'kb_read' } })
+      queue.onEvent(child, { type: 'turn/end', data: { turn: 1 } })
+      queue.onEvent(root, assistantEvent('quotes the subagent report'))
+      queue.onEvent(root, { type: 'turn/end', data: { turn: 1 } })
+      queue.onEvent(root, assistantEvent('later reply'))
+      await queue.idle()
+      expect(messagesOf(server.requests).map(entry => entry.content)).toEqual(['ask', 'later reply'])
+    }
+  })
+
+  it('retries a failed commit without appending the message again', async () => {
+    let commitDown = true
+    const { server, callers, queue } = setup({ capture: { commitAfterChars: 1000 } }, request => commitDown && request.path.endsWith('/commit') ? { status: 503 } : {})
+    const root = session('s1')
+    callers.onClaimed(root, ownerSource)
+    queue.onEvent(root, userEvent('z'.repeat(1000)))
+    await queue.idle()
+    expect(queue.pendingCount()).toBe(1)
+    commitDown = false
+    queue.onEvent(root, userEvent('next'))
+    await queue.idle()
+    expect(queue.pendingCount()).toBe(0)
+    expect(messagesOf(server.requests).map(entry => entry.content?.toString().slice(0, 4))).toEqual(['zzzz', 'next'])
+    expect(server.requests.filter(request => request.path.endsWith('/commit'))).toHaveLength(2)
+  })
+
   it('skips subagent Sessions unless configured', async () => {
     const off = setup()
     const root = session('s1')
