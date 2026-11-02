@@ -1,0 +1,5 @@
+lib/
+node_modules/
+.pnpm-store/
+*.tsbuildinfo
+.DS_Store

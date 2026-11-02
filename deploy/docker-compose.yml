@@ -1,0 +1,41 @@
+# OpenViking server for dsh-openviking, intranet only, trusted mode.
+#
+# 1. Copy ov.conf.example to ./openviking/ov.conf and fill in the intranet
+#    embedding, VLM, and rerank endpoints.
+# 2. Put the secrets in a .env file next to this file (never commit it):
+#      OPENVIKING_ROOT_API_KEY=<a long random string>
+#      INTRANET_MODEL_API_KEY=<key of the intranet model gateway>
+# 3. docker compose up -d
+# 4. Give DSH the same root key as the credential OPENVIKING_API_KEY (DSH
+#    credential store, or the environment of the DSH process).
+#
+# Trusted mode accepts the user named in X-OpenViking-User from anyone holding
+# the root key, so keep port 1933 reachable only from the DSH container.
+
+services:
+  openviking:
+    # Pull through the intranet registry mirror when ghcr.io is not reachable.
+    image: ghcr.io/volcengine/openviking:latest
+    container_name: openviking
+    command: ["--without-bot"]
+    expose:
+      - "1933"
+    volumes:
+      - ./openviking:/app/.openviking
+    environment:
+      OPENVIKING_ROOT_API_KEY: ${OPENVIKING_ROOT_API_KEY:?set OPENVIKING_ROOT_API_KEY in .env}
+      INTRANET_MODEL_API_KEY: ${INTRANET_MODEL_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "openviking-entrypoint", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks: [dsh]
+
+# Attach the DSH container to the same network and point dsh-openviking at
+# http://openviking:1933.
+networks:
+  dsh:
+    name: dsh
