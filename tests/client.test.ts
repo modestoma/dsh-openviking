@@ -71,6 +71,19 @@ describe('OpenVikingClient', () => {
     expect(new OpenVikingError('m', 429, undefined).retryable).toBe(true)
   })
 
+  it('reports a body that fails to arrive as retryable', async () => {
+    const broken = new OpenVikingClient({
+      endpoint: 'http://ov.test',
+      account: 'a',
+      apiKey: async () => 'k',
+      timeoutMs: 1000,
+      fetch: (async () => new Response(new ReadableStream({ start: controller => { controller.error(new TypeError('terminated')) } }))) as typeof fetch,
+    })
+    const error = await broken.commit({ user: 'u' }, 's1').catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(OpenVikingError)
+    expect((error as OpenVikingError).retryable).toBe(true)
+  })
+
   it('treats an existing session as created', async () => {
     const client = clientOf(fakeServer(() => ({ status: 409, body: { status: 'error', error: { code: 'ALREADY_EXISTS', message: 'exists' } } })))
     await expect(client.ensureSession({ user: 'u' }, 's1')).resolves.toBeUndefined()

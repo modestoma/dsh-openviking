@@ -289,7 +289,9 @@ export class CaptureQueue {
         if (error instanceof OpenVikingError && error.retryable) break
         this.deps.warn('dsh-openviking: dropped a capture write for %s: %s', next.session.identity.user, error instanceof Error ? error.message : String(error))
       }
-      this.pending.shift()
+      // Remove this entry by identity: performing it may have queued a commit that evicted older entries.
+      const index = this.pending.indexOf(next)
+      if (index !== -1) this.pending.splice(index, 1)
     }
     this.refreshLatches()
   }

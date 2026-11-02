@@ -168,6 +168,7 @@ export class OpenVikingClient {
     const timeout = AbortSignal.timeout(options.timeoutMs ?? this.options.timeoutMs)
     const signal = options.signal === undefined ? timeout : AbortSignal.any([timeout, options.signal])
     let response: Response
+    let text: string
     try {
       response = await this.fetch(url, {
         method,
@@ -175,10 +176,11 @@ export class OpenVikingClient {
         ...options.body === undefined ? {} : { body: JSON.stringify(options.body) },
         signal,
       })
+      text = await response.text()
     } catch (error) {
+      // No complete response (connection, timeout, or body read failure): retryable.
       throw new OpenVikingError(`OpenViking ${method} ${path} failed: ${error instanceof Error ? error.message : String(error)}`, undefined, undefined)
     }
-    const text = await response.text()
     let envelope: { status?: unknown; result?: unknown; error?: { code?: unknown; message?: unknown }; detail?: unknown } = {}
     if (text !== '') {
       try {

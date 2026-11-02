@@ -126,6 +126,30 @@ describe('CaptureQueue', () => {
     expect(server.requests.filter(request => request.path.endsWith('/commit'))).toHaveLength(2)
   })
 
+  it('keeps later writes when a drained append queues its commit into a full queue', async () => {
+    let appendsDown = true
+    let commitsDown = true
+    const { server, callers, queue } = setup({ capture: { commitAfterChars: 1000, pendingMax: 2 } }, request => {
+      if (request.path.endsWith('/commit')) return commitsDown ? { status: 503 } : {}
+      return appendsDown && request.path.endsWith('/messages') ? { status: 503 } : {}
+    })
+    const root = session('s1')
+    callers.onClaimed(root, ownerSource)
+    queue.onEvent(root, userEvent('z'.repeat(1000)))
+    queue.onEvent(root, userEvent('second'))
+    await queue.idle()
+    appendsDown = false
+    queue.onEvent(root, userEvent('third'))
+    await queue.idle()
+    commitsDown = false
+    queue.onEvent(root, userEvent('fourth'))
+    await queue.idle()
+    // The first two appends of the long message failed while appends were down.
+    const delivered = server.requests.filter(request => request.path.endsWith('/messages')).slice(2).map(request => String(request.body?.content).slice(0, 6))
+    expect(delivered).toEqual(['zzzzzz', 'second', 'third', 'fourth'])
+    expect(queue.pendingCount()).toBe(0)
+  })
+
   it('skips subagent Sessions unless configured', async () => {
     const off = setup()
     const root = session('s1')
