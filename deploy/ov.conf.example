@@ -1,0 +1,36 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 1933,
+    "auth_mode": "trusted",
+    "root_api_key": "${OPENVIKING_ROOT_API_KEY}"
+  },
+  "storage": {
+    "workspace": "./data"
+  },
+  "embedding": {
+    "dense": {
+      "provider": "openai",
+      "api_base": "http://<intranet-embedding-host>/v1",
+      "api_key": "${INTRANET_MODEL_API_KEY}",
+      "model": "<embedding-model>",
+      "dimension": 1024,
+      "input": "multimodal"
+    }
+  },
+  "vlm": {
+    "provider": "openai",
+    "api_base": "http://<intranet-vlm-host>/v1",
+    "api_key": "${INTRANET_MODEL_API_KEY}",
+    "model": "<vision-language-model>",
+    "temperature": 0.0,
+    "max_retries": 2
+  },
+  "rerank": {
+    "provider": "openai",
+    "api_base": "http://<intranet-rerank-host>/v1/reranks",
+    "api_key": "${INTRANET_MODEL_API_KEY}",
+    "model": "<rerank-model>",
+    "threshold": 0.1
+  }
+}

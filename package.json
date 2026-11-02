@@ -1,0 +1,79 @@
+{
+  "name": "dsh-openviking",
+  "version": "0.0.0",
+  "description": "DeepSeek Harness (DSH) 的 OpenViking 长期记忆插件：按会话日志里的调用者（principal）把每个用户映射成独立的 OpenViking 用户，提供召回、捕获和记忆工具",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/modestoma/dsh-openviking.git"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "deploy",
+    "README.md",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsdown --config tsdown.config.ts",
+    "verify:host": "node scripts/verify-host-loader.mjs",
+    "prepack": "pnpm build",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm verify:host"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "openviking",
+    "memory"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/github": "^12.0.10",
+    "@semantic-release/npm": "^13.2.0",
+    "@semantic-release/release-notes-generator": "^14.1.1",
+    "@types/node": "^26.6.6",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "semantic-release": "^25.0.9",
+    "tsdown": "0.22.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": false
+    }
+  }
+}

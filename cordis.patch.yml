@@ -1,0 +1,5 @@
+- insert:
+    - id: dsh-openviking
+      name: 'dsh-openviking'
+      config:
+        endpoint: 'http://openviking:1933'
