@@ -33,6 +33,8 @@ DSH 在每条用户消息的来源里记录调用者：Host 所有者从浏览�
 
 希望自己在 Web 和其他接入方用同一份记忆时，把 `identities.owner` 设成与另一个接入方相同的用户名，例如 `owner: 'feishu-ou_你的user_id'`。
 
+**飞书私聊与群话题**：飞书渠道在私聊话题里提交的消息带 `{ kind: 'feishu-user', userId }`，在群话题里带 `{ kind: 'feishu-group', chatId, userId }`（`userId` 是这条消息的发言人）。默认模板只映射 `feishu-user`，所以个人记忆只在私聊里召回和捕获；群话题这一轮没有身份：不召回、不捕获、不提供记忆工具，不会把群里的内容写进某个人的记忆。群记忆（例如按群建用户 `feishu-group: 'feishu-group-{chatId}'`）在确认群内所有成员都可以共享这些记忆之前不要配置。身份只看 `principal`，不看会话目录：飞书每个话题一个目录，`peer.cwdPattern` 对飞书会话没有必要。
+
 **接入方要求：** 多用户接入方必须在它代发的每条消息上记录 `principal`。不记录的接入方，其消息按 `unattributedPrompts` 处理；默认 `skip` 时这些对话没有记忆，不会误写进所有者的空间。
 
 ## 召回、捕获和工具
