@@ -226,7 +226,8 @@ export function createTools(deps: ToolDeps): ToolDefinition[] {
 }
 
 function define<S extends z.ZodType, V>(deps: ToolDeps, spec: Spec<S, V>): ToolDefinition<V> {
-  const parameters = z.toJSONSchema(spec.schema, { target: 'draft-2020-12' }) as Record<string, unknown>
+  // The JSON round trip drops the non-enumerable `~standard` member Zod adds; the harness rejects tool parameters JSON would lose data from.
+  const parameters = JSON.parse(JSON.stringify(z.toJSONSchema(spec.schema, { target: 'draft-2020-12' }))) as Record<string, unknown>
   delete parameters.$schema
   return {
     name: spec.name,

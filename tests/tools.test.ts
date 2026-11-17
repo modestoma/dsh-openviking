@@ -131,4 +131,14 @@ describe('memory tools', () => {
     expect(tools.get('memory_read')?.output.render({}, { uri: 'u' })).toEqual([{ type: 'text', text: '{\n  "uri": "u"\n}' }])
     expect(tools.get('memory_read')?.parameters).not.toHaveProperty('$schema')
   })
+
+  it('expose parameters as plain JSON with no member a JSON round trip would drop', () => {
+    const hidden = (value: unknown, path: string): string[] => {
+      if (typeof value !== 'object' || value === null) return []
+      const own = Reflect.ownKeys(value).filter(key => !(Array.isArray(value) && key === 'length'))
+      const dropped = own.filter(key => typeof key !== 'string' || !Object.prototype.propertyIsEnumerable.call(value, key)).map(key => `${path}.${String(key)}`)
+      return [...dropped, ...Object.entries(value).flatMap(([key, child]) => hidden(child, `${path}.${key}`))]
+    }
+    for (const [name, tool] of setup().tools) expect(hidden(tool.parameters, name)).toEqual([])
+  })
 })
